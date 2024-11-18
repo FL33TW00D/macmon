@@ -1,6 +1,5 @@
 use core_foundation::dictionary::CFDictionaryRef;
 
-use crate::io_kit::*;
 use crate::io_report::*;
 use crate::sources::libc_ram;
 use crate::sources::libc_swap;
@@ -49,7 +48,11 @@ pub struct Metrics {
 
 pub fn zero_div<T: core::ops::Div<Output = T> + Default + PartialEq>(a: T, b: T) -> T {
   let zero: T = Default::default();
-  return if b == zero { zero } else { a / b };
+  if b == zero {
+    zero
+  } else {
+    a / b
+  }
 }
 
 fn calc_freq(item: CFDictionaryRef, freqs: &Vec<u32>) -> (u32, f32) {

@@ -1,25 +1,9 @@
 #![allow(non_upper_case_globals)]
 #![allow(dead_code)]
 
-use std::{
-  collections::HashMap,
-  marker::{PhantomData, PhantomPinned},
-  mem::{size_of, MaybeUninit},
-  os::raw::c_void,
-  ptr::null,
-};
-
 use core_foundation::{
-  array::{CFArrayGetCount, CFArrayGetValueAtIndex, CFArrayRef},
-  base::{kCFAllocatorDefault, kCFAllocatorNull, CFAllocatorRef, CFRange, CFRelease, CFTypeRef},
-  data::{CFDataGetBytes, CFDataGetLength, CFDataRef},
-  dictionary::{
-    kCFTypeDictionaryKeyCallBacks, kCFTypeDictionaryValueCallBacks, CFDictionaryCreate,
-    CFDictionaryCreateMutableCopy, CFDictionaryGetCount, CFDictionaryGetKeysAndValues,
-    CFDictionaryGetValue, CFDictionaryRef, CFMutableDictionaryRef,
-  },
-  number::{kCFNumberSInt32Type, CFNumberCreate, CFNumberRef},
-  string::{kCFStringEncodingUTF8, CFStringCreateWithBytesNoCopy, CFStringGetCString, CFStringRef},
+  base::CFAllocatorRef,
+  dictionary::{CFDictionaryRef, CFMutableDictionaryRef},
 };
 
 #[link(name = "IOKit", kind = "framework")]

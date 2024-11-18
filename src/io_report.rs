@@ -1,22 +1,12 @@
 use std::{
-  collections::HashMap,
   marker::{PhantomData, PhantomPinned},
-  mem::{size_of, MaybeUninit},
-  os::raw::c_void,
-  ptr::null,
+  mem::MaybeUninit,
 };
 
 use core_foundation::{
-  array::{CFArrayGetCount, CFArrayGetValueAtIndex, CFArrayRef},
-  base::{kCFAllocatorDefault, kCFAllocatorNull, CFAllocatorRef, CFRange, CFRelease, CFTypeRef},
-  data::{CFDataGetBytes, CFDataGetLength, CFDataRef},
-  dictionary::{
-    kCFTypeDictionaryKeyCallBacks, kCFTypeDictionaryValueCallBacks, CFDictionaryCreate,
-    CFDictionaryCreateMutableCopy, CFDictionaryGetCount, CFDictionaryGetKeysAndValues,
-    CFDictionaryGetValue, CFDictionaryRef, CFMutableDictionaryRef,
-  },
-  number::{kCFNumberSInt32Type, CFNumberCreate, CFNumberRef},
-  string::{kCFStringEncodingUTF8, CFStringCreateWithBytesNoCopy, CFStringGetCString, CFStringRef},
+  base::{kCFAllocatorDefault, CFTypeRef},
+  dictionary::{CFDictionaryRef, CFMutableDictionaryRef},
+  string::CFStringRef,
 };
 
 use crate::{io_kit::*, sources::from_cfstr};
@@ -55,7 +45,7 @@ fn get_cf_string<F>(getter: F) -> String
 where
   F: FnOnce() -> CFStringRef,
 {
-  match unsafe { getter() } {
+  match getter() {
     x if x.is_null() => String::new(),
     x => from_cfstr(x),
   }
