@@ -48,6 +48,16 @@ pub fn cfstr(val: &str) -> CFStringRef {
   }
 }
 
+fn get_cf_string<F>(getter: F) -> String
+where
+  F: FnOnce() -> CFStringRef,
+{
+  match unsafe { getter() } {
+    x if x.is_null() => String::new(),
+    x => from_cfstr(x),
+  }
+}
+
 pub fn from_cfstr(val: CFStringRef) -> String {
   unsafe {
     let mut buf = Vec::with_capacity(128);
@@ -108,10 +118,10 @@ type IOReportSubscriptionRef = *const IOReportSubscription;
 #[link(name = "IOReport", kind = "dylib")]
 #[rustfmt::skip]
 extern "C" {
-  fn IOReportCopyAllChannels(a: u64, b: u64) -> CFDictionaryRef;
-  fn IOReportCopyChannelsInGroup(a: CFStringRef, b: CFStringRef, c: u64, d: u64, e: u64) -> CFDictionaryRef;
+  fn IOReportCopyAllChannels(a: u64, b: u64) -> CFMutableDictionaryRef;
+  fn IOReportCopyChannelsInGroup(group: CFStringRef, subgroup: CFStringRef, c: u64, d: u64, e: u64) -> CFMutableDictionaryRef;
   fn IOReportMergeChannels(a: CFDictionaryRef, b: CFDictionaryRef, nil: CFTypeRef);
-  fn IOReportCreateSubscription(a: CVoidRef, b: CFMutableDictionaryRef, c: *mut CFMutableDictionaryRef, d: u64, b: CFTypeRef) -> IOReportSubscriptionRef;
+  fn IOReportCreateSubscription(a: CVoidRef, desired_channels: CFMutableDictionaryRef, subbed_channels: *mut CFMutableDictionaryRef, channel_id: u64, b: CFTypeRef) -> IOReportSubscriptionRef;
   fn IOReportCreateSamples(a: IOReportSubscriptionRef, b: CFMutableDictionaryRef, c: CFTypeRef) -> CFDictionaryRef;
   fn IOReportCreateSamplesDelta(a: CFDictionaryRef, b: CFDictionaryRef, c: CFTypeRef) -> CFDictionaryRef;
   fn IOReportChannelGetGroup(a: CFDictionaryRef) -> CFStringRef;
@@ -127,24 +137,15 @@ extern "C" {
 // MARK: IOReport helpers
 
 fn cfio_get_group(item: CFDictionaryRef) -> String {
-  match unsafe { IOReportChannelGetGroup(item) } {
-    x if x.is_null() => String::new(),
-    x => from_cfstr(x),
-  }
+  get_cf_string(|| unsafe { IOReportChannelGetGroup(item) })
 }
 
 fn cfio_get_subgroup(item: CFDictionaryRef) -> String {
-  match unsafe { IOReportChannelGetSubGroup(item) } {
-    x if x.is_null() => String::new(),
-    x => from_cfstr(x),
-  }
+  get_cf_string(|| unsafe { IOReportChannelGetSubGroup(item) })
 }
 
 fn cfio_get_channel(item: CFDictionaryRef) -> String {
-  match unsafe { IOReportChannelGetChannelName(item) } {
-    x if x.is_null() => String::new(),
-    x => from_cfstr(x),
-  }
+  get_cf_string(|| unsafe { IOReportChannelGetChannelName(item) })
 }
 
 pub fn cfio_get_props(entry: u32, name: String) -> WithError<CFDictionaryRef> {
@@ -468,7 +469,7 @@ pub fn get_soc_info() -> WithError<SocInfo> {
     }
   }
 
-  if info.ecpu_freqs.len() == 0 || info.pcpu_freqs.len() == 0 {
+  if info.ecpu_freqs.is_empty() || info.pcpu_freqs.is_empty() {
     return Err("No CPU cores found".into());
   }
 
@@ -479,7 +480,7 @@ pub fn get_soc_info() -> WithError<SocInfo> {
 
 unsafe fn cfio_get_chan(items: Vec<(&str, Option<&str>)>) -> WithError<CFMutableDictionaryRef> {
   // if no items are provided, return all channels
-  if items.len() == 0 {
+  if items.is_empty() {
     let c = IOReportCopyAllChannels(0, 0);
     let r = CFDictionaryCreateMutableCopy(kCFAllocatorDefault, CFDictionaryGetCount(c), c);
     CFRelease(c as _);
@@ -489,7 +490,7 @@ unsafe fn cfio_get_chan(items: Vec<(&str, Option<&str>)>) -> WithError<CFMutable
   let mut channels = vec![];
   for (group, subgroup) in items {
     let gname = cfstr(group);
-    let sname = subgroup.map_or(null(), |x| cfstr(x));
+    let sname = subgroup.map_or(null(), cfstr);
     let chan = IOReportCopyChannelsInGroup(gname, sname, 0, 0, 0);
     channels.push(chan);
 
@@ -521,7 +522,7 @@ unsafe fn cfio_get_chan(items: Vec<(&str, Option<&str>)>) -> WithError<CFMutable
 unsafe fn cfio_get_subs(chan: CFMutableDictionaryRef) -> WithError<IOReportSubscriptionRef> {
   let mut s: MaybeUninit<CFMutableDictionaryRef> = MaybeUninit::uninit();
   let rs = IOReportCreateSubscription(std::ptr::null(), chan, s.as_mut_ptr(), 0, std::ptr::null());
-  if rs == std::ptr::null() {
+  if rs.is_null() {
     return Err("Failed to create subscription".into());
   }
 
@@ -561,7 +562,7 @@ impl IOReport {
   }
 
   pub fn get_samples(&mut self, duration: u64, count: usize) -> Vec<(IOReportIterator, u64)> {
-    let count = count.max(1).min(32);
+    let count = count.clamp(1, 32);
     let mut samples: Vec<(IOReportIterator, u64)> = Vec::with_capacity(count);
     let step_msec = duration / count as u64;
 
@@ -616,9 +617,6 @@ type IOHIDServiceClientRef = *const IOHIDServiceClient;
 type IOHIDEventSystemClientRef = *const IOHIDEventSystemClient;
 type IOHIDEventRef = *const IOHIDEvent;
 
-const kHIDPage_AppleVendor: i32 = 0xff00;
-const kHIDUsage_AppleVendor_TemperatureSensor: i32 = 0x0005;
-
 const kIOHIDEventTypeTemperature: i64 = 15;
 const kIOHIDEventTypePower: i64 = 25;
 
@@ -626,11 +624,11 @@ const kIOHIDEventTypePower: i64 = 25;
 #[rustfmt::skip]
 extern "C" {
   fn IOHIDEventSystemClientCreate(allocator: CFAllocatorRef) -> IOHIDEventSystemClientRef;
-  fn IOHIDEventSystemClientSetMatching(a: IOHIDEventSystemClientRef, b: CFDictionaryRef) -> i32;
+  fn IOHIDEventSystemClientSetMatching(client: IOHIDEventSystemClientRef, b: CFDictionaryRef) -> i32;
   fn IOHIDEventSystemClientCopyServices(a: IOHIDEventSystemClientRef) -> CFArrayRef;
   fn IOHIDServiceClientCopyProperty(a: IOHIDServiceClientRef, b: CFStringRef) -> CFStringRef;
   fn IOHIDServiceClientCopyEvent(a: IOHIDServiceClientRef, v0: i64, v1: i32, v2: i64) -> IOHIDEventRef;
-  fn IOHIDEventGetFloatValue(event: IOHIDEventRef, field: i64) -> f64;
+  fn IOHIDEventGetFloatValue(event: IOHIDEventRef, field: i32) -> f64;
 }
 
 // MARK: IOHIDSensors
@@ -640,9 +638,15 @@ pub struct IOHIDSensors {
 }
 
 impl IOHIDSensors {
+  const PRIMARY_USAGE_PAGE: &'static str = "PrimaryUsagePage";
+  const PRIMARY_USAGE: &'static str = "PrimaryUsage";
+  const kHIDPage_AppleVendor: i32 = 0xff00;
+  const kHIDUsage_AppleVendor_TemperatureSensor: i32 = 0x0005;
+
   pub fn new() -> WithError<Self> {
-    let keys = vec![cfstr("PrimaryUsagePage"), cfstr("PrimaryUsage")];
-    let nums = vec![cfnum(kHIDPage_AppleVendor), cfnum(kHIDUsage_AppleVendor_TemperatureSensor)];
+    let keys = [cfstr(Self::PRIMARY_USAGE_PAGE), cfstr(Self::PRIMARY_USAGE)];
+    let nums =
+      [cfnum(Self::kHIDPage_AppleVendor), cfnum(Self::kHIDUsage_AppleVendor_TemperatureSensor)];
 
     let dict = unsafe {
       CFDictionaryCreate(
@@ -689,7 +693,7 @@ impl IOHIDSensors {
           x => x,
         };
 
-        let temp = IOHIDEventGetFloatValue(event, kIOHIDEventTypeTemperature << 16);
+        let temp = IOHIDEventGetFloatValue(event, (kIOHIDEventTypeTemperature << 16) as i32);
         CFRelease(event as _);
         items.push((name, temp as f32));
       }
