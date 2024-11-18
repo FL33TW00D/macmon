@@ -22,6 +22,8 @@ use core_foundation::{
   string::{kCFStringEncodingUTF8, CFStringCreateWithBytesNoCopy, CFStringGetCString, CFStringRef},
 };
 
+use crate::io_report::*;
+
 pub type WithError<T> = Result<T, Box<dyn std::error::Error>>;
 pub type CVoidRef = *const std::ffi::c_void;
 
@@ -45,16 +47,6 @@ pub fn cfstr(val: &str) -> CFStringRef {
       0,
       kCFAllocatorNull,
     )
-  }
-}
-
-fn get_cf_string<F>(getter: F) -> String
-where
-  F: FnOnce() -> CFStringRef,
-{
-  match unsafe { getter() } {
-    x if x.is_null() => String::new(),
-    x => from_cfstr(x),
   }
 }
 
@@ -105,82 +97,6 @@ extern "C" {
   fn IORegistryEntryGetName(entry: u32, name: *mut i8) -> i32;
   fn IORegistryEntryCreateCFProperties(entry: u32, properties: *mut CFMutableDictionaryRef, allocator: CFAllocatorRef, options: u32) -> i32;
   fn IOObjectRelease(obj: u32) -> u32;
-}
-
-#[repr(C)]
-struct IOReportSubscription {
-  _data: [u8; 0],
-  _phantom: PhantomData<(*mut u8, PhantomPinned)>,
-}
-
-type IOReportSubscriptionRef = *const IOReportSubscription;
-
-#[link(name = "IOReport", kind = "dylib")]
-#[rustfmt::skip]
-extern "C" {
-  fn IOReportCopyAllChannels(a: u64, b: u64) -> CFMutableDictionaryRef;
-  fn IOReportCopyChannelsInGroup(group: CFStringRef, subgroup: CFStringRef, c: u64, d: u64, e: u64) -> CFMutableDictionaryRef;
-  fn IOReportMergeChannels(a: CFDictionaryRef, b: CFDictionaryRef, nil: CFTypeRef);
-  fn IOReportCreateSubscription(a: CVoidRef, desired_channels: CFMutableDictionaryRef, subbed_channels: *mut CFMutableDictionaryRef, channel_id: u64, b: CFTypeRef) -> IOReportSubscriptionRef;
-  fn IOReportCreateSamples(a: IOReportSubscriptionRef, b: CFMutableDictionaryRef, c: CFTypeRef) -> CFDictionaryRef;
-  fn IOReportCreateSamplesDelta(a: CFDictionaryRef, b: CFDictionaryRef, c: CFTypeRef) -> CFDictionaryRef;
-  fn IOReportChannelGetGroup(a: CFDictionaryRef) -> CFStringRef;
-  fn IOReportChannelGetSubGroup(a: CFDictionaryRef) -> CFStringRef;
-  fn IOReportChannelGetChannelName(a: CFDictionaryRef) -> CFStringRef;
-  fn IOReportSimpleGetIntegerValue(a: CFDictionaryRef, b: i32) -> i64;
-  fn IOReportChannelGetUnitLabel(a: CFDictionaryRef) -> CFStringRef;
-  fn IOReportStateGetCount(a: CFDictionaryRef) -> i32;
-  fn IOReportStateGetNameForIndex(a: CFDictionaryRef, b: i32) -> CFStringRef;
-  fn IOReportStateGetResidency(a: CFDictionaryRef, b: i32) -> i64;
-}
-
-// MARK: IOReport helpers
-
-fn cfio_get_group(item: CFDictionaryRef) -> String {
-  get_cf_string(|| unsafe { IOReportChannelGetGroup(item) })
-}
-
-fn cfio_get_subgroup(item: CFDictionaryRef) -> String {
-  get_cf_string(|| unsafe { IOReportChannelGetSubGroup(item) })
-}
-
-fn cfio_get_channel(item: CFDictionaryRef) -> String {
-  get_cf_string(|| unsafe { IOReportChannelGetChannelName(item) })
-}
-
-pub fn cfio_get_props(entry: u32, name: String) -> WithError<CFDictionaryRef> {
-  unsafe {
-    let mut props: MaybeUninit<CFMutableDictionaryRef> = MaybeUninit::uninit();
-    if IORegistryEntryCreateCFProperties(entry, props.as_mut_ptr(), kCFAllocatorDefault, 0) != 0 {
-      return Err(format!("Failed to get properties for {}", name).into());
-    }
-
-    Ok(props.assume_init())
-  }
-}
-
-pub fn cfio_get_residencies(item: CFDictionaryRef) -> Vec<(String, i64)> {
-  let count = unsafe { IOReportStateGetCount(item) };
-  let mut res = vec![];
-
-  for i in 0..count {
-    let name = unsafe { IOReportStateGetNameForIndex(item, i) };
-    let val = unsafe { IOReportStateGetResidency(item, i) };
-    res.push((from_cfstr(name), val));
-  }
-
-  res
-}
-
-pub fn cfio_watts(item: CFDictionaryRef, unit: &String, duration: u64) -> WithError<f32> {
-  let val = unsafe { IOReportSimpleGetIntegerValue(item, 0) } as f32;
-  let val = val / (duration as f32 / 1000.0);
-  match unit.as_str() {
-    "mJ" => Ok(val / 1e3f32),
-    "uJ" => Ok(val / 1e6f32),
-    "nJ" => Ok(val / 1e9f32),
-    _ => Err(format!("Invalid energy unit: {}", unit).into()),
-  }
 }
 
 // MARK: IOServiceIterator

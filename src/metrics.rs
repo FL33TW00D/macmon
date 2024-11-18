@@ -1,8 +1,13 @@
 use core_foundation::dictionary::CFDictionaryRef;
 
-use crate::sources::{
-  cfio_get_residencies, cfio_watts, libc_ram, libc_swap, IOHIDSensors, IOReport, SocInfo, SMC,
-};
+use crate::io_kit::*;
+use crate::io_report::*;
+use crate::sources::libc_ram;
+use crate::sources::libc_swap;
+use crate::sources::IOHIDSensors;
+use crate::sources::IOReport;
+use crate::sources::SocInfo;
+use crate::sources::SMC;
 
 type WithError<T> = Result<T, Box<dyn std::error::Error>>;
 

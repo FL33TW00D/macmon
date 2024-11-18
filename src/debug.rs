@@ -1,8 +1,10 @@
 use core_foundation::base::CFRelease;
 
-use crate::sources::{
-  cfdict_keys, cfio_get_props, cfio_get_residencies, cfio_watts, get_dvfs_mhz, run_system_profiler,
-  IOHIDSensors, IOReport, IOServiceIterator, SMC,
+use crate::{
+  io_report::{cfio_get_props, cfio_get_residencies, cfio_watts},
+  sources::{
+    cfdict_keys, get_dvfs_mhz, run_system_profiler, IOHIDSensors, IOReport, IOServiceIterator, SMC,
+  },
 };
 
 type WithError<T> = Result<T, Box<dyn std::error::Error>>;
