@@ -14,8 +14,6 @@ type WithError<T> = Result<T, Box<dyn std::error::Error>>;
 const CPU_FREQ_CORE_SUBG: &str = "CPU Core Performance States";
 const GPU_FREQ_DICE_SUBG: &str = "GPU Performance States";
 
-// MARK: Structs
-
 #[derive(Debug, Default)]
 pub struct TempMetrics {
   pub cpu_temp_avg: f32, // Celsius
@@ -43,8 +41,6 @@ pub struct Metrics {
   pub all_power: f32,         // Watts
   pub sys_power: f32,         // Watts
 }
-
-// MARK: Helpers
 
 pub fn zero_div<T: core::ops::Div<Output = T> + Default + PartialEq>(a: T, b: T) -> T {
   let zero: T = Default::default();
@@ -74,8 +70,8 @@ fn calc_freq(item: CFDictionaryRef, freqs: &Vec<u32>) -> (u32, f32) {
   }
 
   let usage_ratio = zero_div(usage, total);
-  let min_freq = freqs.first().unwrap().clone() as f64;
-  let max_freq = freqs.last().unwrap().clone() as f64;
+  let min_freq = *freqs.first().unwrap() as f64;
+  let max_freq = *freqs.last().unwrap() as f64;
   let from_max = (avg_freq.max(min_freq) * usage_ratio) / max_freq;
 
   (avg_freq as u32, from_max as f32)
@@ -84,7 +80,7 @@ fn calc_freq(item: CFDictionaryRef, freqs: &Vec<u32>) -> (u32, f32) {
 fn calc_freq_final(items: &Vec<(u32, f32)>, freqs: &Vec<u32>) -> (u32, f32) {
   let avg_freq = zero_div(items.iter().map(|x| x.0 as f32).sum(), items.len() as f32);
   let avg_perc = zero_div(items.iter().map(|x| x.1 as f32).sum(), items.len() as f32);
-  let min_freq = freqs.first().unwrap().clone() as f32;
+  let min_freq = *freqs.first().unwrap() as f32;
 
   (avg_freq.max(min_freq) as u32, avg_perc)
 }
@@ -203,7 +199,7 @@ impl Sampler {
   fn get_temp(&mut self) -> WithError<TempMetrics> {
     // HID for M1, SMC for M2/M3
     // UPD: Looks like HID/SMC related to OS version, not to the chip (SMC available from macOS 14)
-    match self.smc_cpu_keys.len() > 0 {
+    match !self.smc_cpu_keys.is_empty() {
       true => self.get_temp_smc(),
       false => self.get_temp_hid(),
     }
