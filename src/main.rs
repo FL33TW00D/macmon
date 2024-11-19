@@ -1,6 +1,7 @@
 mod app;
 mod config;
 mod debug;
+mod io_hid;
 mod io_kit;
 mod io_report;
 mod metrics;

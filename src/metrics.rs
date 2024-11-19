@@ -1,9 +1,9 @@
 use core_foundation::dictionary::CFDictionaryRef;
 
+use crate::io_hid::*;
 use crate::io_report::*;
 use crate::sources::libc_ram;
 use crate::sources::libc_swap;
-use crate::sources::IOHIDSensors;
 use crate::sources::IOReport;
 use crate::sources::SocInfo;
 use crate::sources::SMC;

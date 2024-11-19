@@ -6,6 +6,8 @@ use core_foundation::{
   dictionary::{CFDictionaryRef, CFMutableDictionaryRef},
 };
 
+// Common IOKit functions
+
 #[link(name = "IOKit", kind = "framework")]
 #[rustfmt::skip]
 extern "C" {
