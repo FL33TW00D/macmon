@@ -5,6 +5,7 @@ mod io_hid;
 mod io_kit;
 mod io_report;
 mod metrics;
+mod smc;
 mod sources;
 
 use app::App;
