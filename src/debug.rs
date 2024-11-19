@@ -2,8 +2,8 @@ use core_foundation::base::CFRelease;
 
 use crate::{
   io_hid::IOHIDSensors,
-  io_report::{cfio_get_props, cfio_get_residencies, cfio_watts},
-  sources::{cfdict_keys, get_dvfs_mhz, run_system_profiler, IOReport, IOServiceIterator, SMC},
+  io_report::{cfio_get_props, cfio_get_residencies, cfio_watts, IOReport},
+  sources::{cfdict_keys, get_dvfs_mhz, run_system_profiler, IOServiceIterator, SMC},
 };
 
 type WithError<T> = Result<T, Box<dyn std::error::Error>>;

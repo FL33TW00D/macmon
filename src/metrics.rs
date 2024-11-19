@@ -4,7 +4,6 @@ use crate::io_hid::*;
 use crate::io_report::*;
 use crate::sources::libc_ram;
 use crate::sources::libc_swap;
-use crate::sources::IOReport;
 use crate::sources::SocInfo;
 use crate::sources::SMC;
 
@@ -43,12 +42,7 @@ pub struct Metrics {
 }
 
 pub fn zero_div<T: core::ops::Div<Output = T> + Default + PartialEq>(a: T, b: T) -> T {
-  let zero: T = Default::default();
-  if b == zero {
-    zero
-  } else {
-    a / b
-  }
+  (b != T::default()).then(|| a / b).unwrap_or_default()
 }
 
 fn calc_freq(item: CFDictionaryRef, freqs: &Vec<u32>) -> (u32, f32) {
